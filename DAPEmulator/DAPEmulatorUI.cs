@@ -15,32 +15,15 @@ namespace DAPEmulator
     /*define and declare delegate*/
     public delegate void SetTextValueCallBack(string strValue);
     public delegate void ReceiveMsgCallBack(string strReceive);
-    public delegate void SendFileCallBack(byte[] bf);
+    public delegate void FactorText(string value);
 
     public partial class DAPEmulatorUI : Form
     {
+        DAPEmulatorUI emulatorUI;
+
         /*create an instance of class named DAPEmulatorComm */
-        DAPEmulatorComm dapEmulatorComm = new DAPEmulatorComm();
-
-        /*define some parameters related of DAP emulator, these parameters all are maybe changed.
-         * s/w version, the version of DAP meter
-         * Internal Serial Number,
-         * DAP Correction Factor, default value is 1.00
-         * Air Pressure, default value is 1013Pa
-         * Temperature, default value is 20`C / 293.15K
-         */
-        public readonly string sw_version = "120-131 ETH";
-        public readonly string InternalSN = "DAP20200714";
-        public double CorrectionFactor = 1.00;
-        public int AirPressure = 1013;
-        public int Temperature = 20;
-        //define some parameters that are used to save default value and just readed only, 
-        public readonly string sw_version_factory = "120-131 ETH";
-        public readonly string InternalSN_factory = "DAP20200714";
-        public readonly double CorrectionFactor_factory = 1.00;
-        public readonly int AirPressure_factory = 1013;
-        public readonly int Temperature_factory = 20;
-
+        DAPEmulatorComm dapEmulatorComm;
+        DAPParameters dapParameters = new DAPParameters();
 
         /*declare delegate*/ 
         SetTextValueCallBack setCallBack;
@@ -66,10 +49,11 @@ namespace DAPEmulator
 
             InitializeComponent();
 
-            this.version.Text = sw_version;
-            this.sn.Text = InternalSN;
-            this.factor.Text = CorrectionFactor.ToString();
+            this.version.Text = dapParameters.sw_version;
+            this.sn.Text = dapParameters.InternalSN;
+            this.factor.Text = dapParameters.CorrectionFactor.ToString();
         }
+
 
 
         /// <summary>
@@ -87,6 +71,10 @@ namespace DAPEmulator
             this.msgReceive.AppendText(strMsg + "\n");
         }
 
+        private void FactorText(string value)
+        {
+            this.factor.Text = value;
+        }
 
         /// <summary>
         /// start DAP emulator and listen client which try to connect with the emulator
@@ -101,274 +89,77 @@ namespace DAPEmulator
 
             //IPAddress ip = IPAddress.Parse(this.ip.Text.Trim());
             IPAddress DAP_ip = IPAddress.Parse(GetAddressIP());
+            int port = CheckPortValue(this.port.Text.Trim()); //default value 
 
+            IPEndPoint endPoint = new IPEndPoint(DAP_ip, port);
+
+            UpdateText(port);
+
+            //call listen method
+            dapEmulatorComm = new DAPEmulatorComm(this, socketWatch);
+            //bind delegate
+            dapEmulatorComm.threadDelegate = new DelegateCollection.updateUIControl(UpdateControl);
+            Thread subThread = new Thread(new ParameterizedThreadStart(dapEmulatorComm.Listen));
+            subThread.IsBackground = true;
+            subThread.Start(endPoint);
+
+        }
+
+        public void OnConnected(Object state)
+        {
+            List<string> logList = state as List<string>;
+            if ("true".Equals(logList[1]))
+            {
+                DisplayLog(logList[0], true, logList[2]);
+            }
+            else
+            {
+                DisplayLog(logList[0], false, logList[2]);
+            }
+
+        }
+
+        private void UpdateText(int port)
+        {
             this.ip.Text = GetAddressIP();
             Application.DoEvents();
 
-            int port = CheckPortValue(this.port.Text.Trim()); //default value 
             this.port.Text = port.ToString();
             Application.DoEvents();
-
-            dapEmulatorComm.Listen(socketWatch, port);
-
-
-            IPEndPoint point = new IPEndPoint(DAP_ip, port);
-            socketWatch.Bind(point);
-            this.msgReceive.AppendText("[" + DateTime.Now.ToString() + "] listen successfully!" + "\n");
-            socketWatch.Listen(10);
-
-            setCallBack = new SetTextValueCallBack(SetTextValue);
-            receiveCallBack = new ReceiveMsgCallBack(ReceiveMsg);
-
-            //create an instance of thread for listening
-            serverListenThread = new Thread(new ParameterizedThreadStart(StartListenMethod));
-            serverListenThread.IsBackground = true;
-            serverListenThread.Start(socketWatch);
         }
-
-        /// <summary>
-        /// method for waiting for connection from client and communicating with client
-        /// <param name="obj"></param>
-        private void StartListenMethod(object obj)
-        {
-            Socket socketWatch = obj as Socket;
-
-            while (true) 
-            {
-                socketSend = socketWatch.Accept();
-
-                string ipStr = socketSend.RemoteEndPoint.ToString();
-
-                string strMsg = "[" + DateTime.Now.ToString() + "] client(" + socketSend.RemoteEndPoint + ") connect successfully!";
-
-                msgReceive.Invoke(setCallBack, strMsg);
-
-                //create a thread for receiving packet from client
-                Thread threadReceive = new Thread(new ParameterizedThreadStart(Receive));
-                threadReceive.IsBackground = true;
-                threadReceive.Start(socketSend);
-            }
-        }
-
-        /// <summary> 
-        ///  method for receiving and processing packets from client in a loop;
-        ///  there are different prefixes in data string:
-        ///  "%SFD", it is used to write Correction Factor of DAP to DAP Emulator;
-        ///  
-        /// </summary>
-        /// <param name="obj"></param>
-        private void Receive(object obj)
-        {
-            Socket socketSend = obj as Socket;
-            Dictionary<string, string> factDict;
-
-            while (true) 
-            {
-                byte[] buffer = new byte[2048];
-
-                int count = socketSend.Receive(buffer);
-
-                string receiveMsgStr = "";
-                string sendData = "";
-
-                if (count == 0)
-                {
-                    break;
-                }
-                else
-                {
-                    string jsonStr = Encoding.Default.GetString(buffer, 0, count);
-                    Dictionary<string, string> paraDict = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonStr);
-
-                    string tempStr = paraDict["data"];
-                    if (tempStr.Equals("LoadAllData"))
-                    {
-                        Dictionary<string, string> tempDict = new Dictionary<string, string>
-                        {
-                            {"sw_version", sw_version},
-                            {"InternalSN", InternalSN},
-                            {"CorrectionFactor", CorrectionFactor.ToString()},
-                            {"AirPressure", AirPressure.ToString()},
-                            {"Temperature", Temperature.ToString()},
-                        };
-
-                        string tempJson = JsonConvert.SerializeObject(tempDict, Formatting.Indented);
-
-                        factDict = new Dictionary<string, string>
-                        {
-                            {"data", "allData" + tempJson}
-                        };
-
-                        String logStr = " DAPEmulatorUI sended all data to ";
-                        DataOperation(factDict, logStr, buffer);
-                        DisplayLog(logStr);
-                    }
-                    else if (tempStr.Equals("Validate"))
-                    {
-                        tempStr = tempStr.Remove(0, 8);
-                        double tempCorrectionFactor = double.Parse(tempStr);
-                        string temp = "success,Validate Successfully";
-
-                        if ((tempCorrectionFactor < 2.50) && (tempCorrectionFactor > 0.25))
-                        {
-                            temp = "failure,sorry, inputed correction factor is not within tolerance";
-                        }
-
-                        factDict = new Dictionary<string, string>
-                        {
-                            {"data", temp}
-                        };
-
-
-                        string logStr = "DAPEmulatorUI Calibration Validate";
-                        DataOperation(factDict, logStr, buffer);
-                    }
-                    else if (tempStr.StartsWith("savePT"))
-                    {
-                        tempStr = tempStr.Remove(0, 6);
-                        string[] tempString = tempStr.Split(',');
-
-                        int tempAirPressure = int.Parse(tempString[0]);
-                        int tempTemperature = int.Parse(tempString[1]);
-
-                        if ((tempAirPressure != AirPressure) || (tempTemperature != Temperature))
-                        {
-                            AirPressure = tempAirPressure;
-                            Temperature = tempTemperature;
-
-                            tempStr = "save successfully";
-                        }
-                        else
-                        {
-                            tempStr = "the value of pressure or temperature does not change";
-                        }
-
-                        factDict = new Dictionary<string, string>
-                        {
-                            {"data", "savePT" + tempStr}
-                        };
-
-                        string logStr = " DAPEmulatorUI savePT ----> ";
-
-
-                        DataOperation(factDict, logStr, buffer);
-
-                        DisplayLog(logStr);
-                    }
-                    else if (tempStr.Equals("reset"))
-                    {
-                        Dictionary<string, string> tempDict = new Dictionary<string, string>
-                        {
-                            {"sw_version", sw_version_factory},
-                            {"InternalSN", InternalSN_factory},
-                            {"CorrectionFactor", CorrectionFactor_factory.ToString()},
-                            {"AirPressure", AirPressure_factory.ToString()},
-                            {"Temperature", Temperature_factory.ToString()},
-                        };
-
-                        string tempJson = JsonConvert.SerializeObject(tempDict, Formatting.Indented);
-                        factDict = new Dictionary<string, string>
-                        {
-                            {"data", "reset" + tempJson}
-                        };
-
-                        string logStr = " DAPEmulatorUI sended all reset data to ";
-                        DataOperation(factDict, logStr, buffer);
-
-                        this.factor.Text = CorrectionFactor_factory.ToString();
-                        Application.DoEvents();
-                    }
-                    else if (tempStr.StartsWith("%SFD"))  
-                    {
-                        //remove prefix contained "%SFD" of tempStr
-                        double tempCorrectionFactor = double.Parse(tempStr.Remove(0, 4));
-
-
-                        if ((int)(tempCorrectionFactor * 100) != (int)(CorrectionFactor * 100))
-                        {
-                            CorrectionFactor = tempCorrectionFactor;
-                            this.factor.Text = CorrectionFactor.ToString();
-                            Application.DoEvents();
-
-                            tempStr = "Correction factor save successfully";
-                        }
-                        else
-                        {
-                            tempStr = "Correction factor does not change";
-                        }
-
-                        factDict = new Dictionary<string, string>
-                        {
-                            {"data", "%SFD" + tempStr}
-                        };
-
-                        string logStr = " " + tempStr + " ";
-                        DataOperation(factDict, logStr, buffer);
-
-                        string json = JsonConvert.SerializeObject(paraDict, Formatting.Indented);
-
-                        byte[] rfdBuffer = new byte[2048];
-                        rfdBuffer = Encoding.Default.GetBytes(json);
-                        int receive = socketSend.Send(rfdBuffer);
-
-
-                    }
-                    else if (tempStr.StartsWith("%RFD"))
-                    {
-                        tempStr = "%RFD" + CorrectionFactor.ToString();
-
-                        factDict = new Dictionary<string, string>
-                        {
-                            {"data", tempStr}
-                        };
-
-                        string json = JsonConvert.SerializeObject(factDict, Formatting.Indented);
-
-                        byte[] rfdBuffer = new byte[2048];
-                        rfdBuffer = Encoding.Default.GetBytes(json);
-                        int receive = socketSend.Send(rfdBuffer);
-
-                        msgReceive.Invoke(receiveCallBack, tempStr);
-                    }
-                    else if (tempStr.Equals("TST"))//"TST" command for testing tability of DAP meter
-                    {
-                        tempStr = tempStr.Trim();
-                        factDict = new Dictionary<string, string>
-                        {
-                            {"data", tempStr}
-                        };
-
-                        receiveMsgStr = "[" + DateTime.Now.ToString() + "] message from " + socketSend.RemoteEndPoint + ":" + tempStr;
-                        msgReceive.Invoke(receiveCallBack, receiveMsgStr); 
-                        string json = JsonConvert.SerializeObject(factDict, Formatting.Indented);
-                        byte[] sendBuffer = Encoding.Default.GetBytes(json);
-
-                        try
-                        {
-                            socketSend.Send(sendBuffer);
-
-                            string tempMsg = "DAPEmulatorUI sended message to " + socketSend.RemoteEndPoint + ":" + factDict["data"];
-                            //msgReceive.Invoke(receiveCallBack, tempMsg);
-                            DisplayLog(tempMsg);
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show("data send exception: \n" + ex.Message);
-                        }
-                    }
-                }
-            }
-        }
-
 
         /// <summary>
         /// record logs in log box
         /// </summary>
         /// <param name="logContent"></param>
-        public void DisplayLog(string logContent)
+        /// <param name="flag">flag: true stand for packet from client,false stand for packet to client</param>
+        /// <param name="commSocket">communicate socket</param>
+        public string DisplayLog(string logContent, bool flag, string pointStr)
         {
-            logContent = "[" + DateTime.Now.ToString() + "] " + logContent; 
+            string temp = " from ";
+            if (!flag) 
+            {
+                temp = "to";
+            };
+
+            logContent = "[" + DateTime.Now.ToString() + "]" + temp + pointStr + ":" + logContent; 
             msgReceive.AppendText(logContent + "\n");
+            return logContent;
+        }
+
+
+        public void UpdateControl(string logContent, bool flag, string pointStr)
+        {
+            string temp = " from ";
+            if (!flag)
+            {
+                temp = "to";
+            };
+
+            logContent = "[" + DateTime.Now.ToString() + "]" + temp + pointStr + ":" + logContent;
+
+            msgReceive.AppendText(logContent + "\n");
+            Application.DoEvents();
         }
 
 
@@ -387,7 +178,7 @@ namespace DAPEmulator
             string tempMsg = "[" + DateTime.Now.ToString() + "]" + logStr + socketSend.RemoteEndPoint;
             //msgReceive.Invoke(receiveCallBack, tempMsg);
 
-            DisplayLog(tempMsg);
+           // DisplayLog(tempMsg);
         }
 
 
@@ -455,6 +246,11 @@ namespace DAPEmulator
             }
 
             return port;
+        }
+
+        private void msgReceive_TextChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }

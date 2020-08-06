@@ -55,6 +55,7 @@
     <Compile Include="client.Designer.cs">
       <DependentUpon>client.cs</DependentUpon>
     </Compile>
+    <Compile Include="DAPProtocol.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="client.resx">
@@ -82,6 +83,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DAPEmulator\DAPEmulator.csproj">
+      <Project>{0F9021E6-DED8-470B-90CE-57267E21B05D}</Project>
+      <Name>DAPEmulator</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

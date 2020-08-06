@@ -38,6 +38,16 @@ namespace DAPEmulator
             return AddressIP;
         }
 
+        /// <summary>
+        /// a common method for processing and sending data 
+        /// </summary>
+        /// <param name="dataDicts"></param>
+        /// <param name="buffer"></param>
+        public void JsonDataOperation(DAPProtocol protocol, byte[] buffer)
+        {
+            String json = JsonConvert.SerializeObject(protocol, Formatting.Indented);
+            buffer = Encoding.Default.GetBytes(json);
+        }
 
         /// <summary>
         /// a common method for processing and sending data 

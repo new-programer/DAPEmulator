@@ -49,6 +49,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CommThread.cs" />
     <Compile Include="DAPEmulatorComm.cs" />
     <Compile Include="DAPEmulatorUI.cs">
       <SubType>Form</SubType>
@@ -56,6 +57,9 @@
     <Compile Include="DAPEmulatorUI.Designer.cs">
       <DependentUpon>DAPEmulatorUI.cs</DependentUpon>
     </Compile>
+    <Compile Include="DAPParameters.cs" />
+    <Compile Include="DAPProtocol.cs" />
+    <Compile Include="DelegateCollection.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utils.cs" />

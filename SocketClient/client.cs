@@ -1,19 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Net.Sockets;
 using System.Threading;
 using System.Net;
-using System.IO;
-using System.Globalization;
 using Newtonsoft.Json;
-using System.Diagnostics;
 
 namespace SocketClient
 {
@@ -29,6 +21,9 @@ namespace SocketClient
 
             InitializeComponent();
         }
+
+        DAPProtocol dapProtocol;
+
 
         //定义回调
         private delegate void SetTextCallBack(string strValue);
@@ -224,24 +219,25 @@ namespace SocketClient
         {
             try
             {
-                string msgStr = "TST";
+                string command = "TST";
 
                 string tempText = this.msgText.Text;
                 if (!tempText.Equals(""))
                 {
-                    msgStr = tempText;
+                    command = tempText;
                 }
 
                 Dictionary<string, string> paraDict = new Dictionary<string, string>
                 {
-                    {"data", msgStr},
+                    {"data", command},
                 };
 
-                string json = JsonConvert.SerializeObject(paraDict, Formatting.Indented);
+                dapProtocol = new DAPProtocol(command, paraDict);
+
+                string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
 
                 byte[] buffer = new byte[2048];
                 buffer = Encoding.Default.GetBytes(json);//发送json字符串
-                //buffer = Encoding.Default.GetBytes(msgStr);//发送 自定义输入的字符串 字符串
                 int receive = socketSend.Send(buffer);
 
                 string tempMsg = "[" + DateTime.Now.ToString() + "] client sended message to " + socketSend.RemoteEndPoint + ":" + paraDict["data"];
@@ -255,7 +251,7 @@ namespace SocketClient
 
         private void DoCalibration(object sender, EventArgs e)
         {
-            double DAP_corr_factor = 1.00;
+            //double DAP_corr_factor = 1.00;
         }
 
         /// <summary>
@@ -358,7 +354,7 @@ namespace SocketClient
                     {
                         string tempCorrectioFactor = this.factor.Text;
 
-                        //string msgStr = "%SFD" + CorrectionFactor.ToString();
+                        //string command = "%SFD" + CorrectionFactor.ToString();
                         string msgStr = "%SFD" + tempCorrectioFactor;
 
                         Dictionary<string, string> paraDict = new Dictionary<string, string>
