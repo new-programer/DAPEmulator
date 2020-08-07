@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace SocketClient
+namespace DAPClibrary
 {
     /// <summary>
     /// a class for protocol package. 
@@ -16,15 +13,19 @@ namespace SocketClient
         string head;
         Dictionary<string, string> body;
 
+        public string Head { get => head; set => head = value; }
+        public Dictionary<string, string> Body { get => body; set => body = value; }
+
         public DAPProtocol()
         {
-            
+
         }
 
         public DAPProtocol(string head, Dictionary<string, string> body)
         {
-            this.head = head;
-            this.body = body;
+            this.Head = head;
+            this.Body = body;
         }
+
     }
 }

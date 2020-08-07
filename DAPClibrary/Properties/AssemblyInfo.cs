@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("emulator")]
+[assembly: AssemblyTitle("DAPClibrary")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("emulator")]
+[assembly: AssemblyProduct("DAPClibrary")]
 [assembly: AssemblyCopyright("Copyright ©  2020")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("624337da-87fa-4670-a428-660fa88b3b05")]
+[assembly: Guid("c004dffe-ac4e-42da-9454-7b0b7d0e6685")]
 
 // Version information for an assembly consists of the following four values:
 //

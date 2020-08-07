@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using DAPClibrary;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,7 +12,7 @@ namespace DAPEmulator
 {
     public class CommThread
     {
-        public DelegateCollection.updateUIControl threadDelegate;
+        public DelegateCollection.updateUIControlDelegate threadDelegate;
         Utils utils = new Utils();
         DAPParameters dapParameters = new DAPParameters();
 
@@ -41,8 +42,9 @@ namespace DAPEmulator
         ///  
         /// </summary>
         /// <param name="obj"></param>
-        public void RunThread()
+        public void RunThread(object UpdataUIDelegate)
         {
+            threadDelegate = UpdataUIDelegate as DelegateCollection.updateUIControlDelegate;
             Dictionary<string, string> factDict;
 
             string jsonStr = string.Empty;
@@ -68,17 +70,26 @@ namespace DAPEmulator
                     switch (command)
                     {
                         case "TST":
-                            threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
 
                             dapProtocol = new DAPProtocol("TST", null);
                             utils.JsonDataOperation(dapProtocol, buffer);
                             commSocket.Send(buffer);
 
-                            threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
                             break;
 
                         case "%RFD":
-                            threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
 
                             dataContent = dapParameters.CorrectionFactor.ToString();
                             factDict = new Dictionary<string, string>
@@ -89,11 +100,17 @@ namespace DAPEmulator
                             utils.JsonDataOperation(factDict, buffer);
                             commSocket.Send(buffer);
 
-                            threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
                             break;
 
                         case "%SFD":
-                            threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
 
                             double tempCorrectionFactor = double.Parse(dapProtocol.Body["CorrectionFactor"]);
                             if ((int)(tempCorrectionFactor * 100) != (int)(dapParameters.CorrectionFactor * 100))
@@ -116,11 +133,17 @@ namespace DAPEmulator
                             utils.JsonDataOperation(factDict, buffer);
                             commSocket.Send(buffer);
 
-                            threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
                             break;
 
                         case "LoadAllData":
-                            threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
 
                             factDict = new Dictionary<string, string>
                             {
@@ -134,11 +157,17 @@ namespace DAPEmulator
                             utils.JsonDataOperation(factDict, buffer);
                             commSocket.Send(buffer);
 
-                            threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
                             break;
 
                         case "reset":
-                            threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
 
                             factDict = new Dictionary<string, string>
                             {
@@ -152,12 +181,18 @@ namespace DAPEmulator
                             utils.JsonDataOperation(factDict, buffer);
                             commSocket.Send(buffer);
 
-                            threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
 
                             break;
 
                         case "savePT":
-                            threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
 
                             int tempAirPressure = int.Parse(dapProtocol.Body["AirPressure"]);
                             int tempTemperature = int.Parse(dapProtocol.Body["Temperature"]);
@@ -182,10 +217,16 @@ namespace DAPEmulator
                             utils.JsonDataOperation(factDict, buffer);
                             commSocket.Send(buffer);
 
-                            threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
                             break;
                         case "Validate":
-                            threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
 
                             double tempFactor = double.Parse(dapProtocol.Body["CorrectionFactor"]);
                             dataContent = "success,Validate Successfully";
@@ -203,7 +244,10 @@ namespace DAPEmulator
                             utils.JsonDataOperation(factDict, buffer);
                             commSocket.Send(buffer);
 
-                            threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
                             break;
                         default:
                             break;

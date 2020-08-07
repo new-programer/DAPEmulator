@@ -17,6 +17,8 @@ namespace DAPEmulator
     public delegate void ReceiveMsgCallBack(string strReceive);
     public delegate void FactorText(string value);
 
+
+
     public partial class DAPEmulatorUI : Form
     {
         DAPEmulatorUI emulatorUI;
@@ -28,6 +30,8 @@ namespace DAPEmulator
         /*declare delegate*/ 
         SetTextValueCallBack setCallBack;
         ReceiveMsgCallBack receiveCallBack;
+        DelegateCollection.updateUIControlDelegate UpdateUIDelegate;
+
 
 
         //declare sockets for listening and sending packets
@@ -52,6 +56,8 @@ namespace DAPEmulator
             this.version.Text = dapParameters.sw_version;
             this.sn.Text = dapParameters.InternalSN;
             this.factor.Text = dapParameters.CorrectionFactor.ToString();
+            //bind method
+            UpdateUIDelegate = new DelegateCollection.updateUIControlDelegate(this.UpdateControl);
         }
 
 
@@ -88,17 +94,15 @@ namespace DAPEmulator
             socketWatch = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
             //IPAddress ip = IPAddress.Parse(this.ip.Text.Trim());
-            IPAddress DAP_ip = IPAddress.Parse(GetAddressIP());
+            IPAddress DAP_ip = IPAddress.Parse(this.ip.Text.Trim());
             int port = CheckPortValue(this.port.Text.Trim()); //default value 
 
             IPEndPoint endPoint = new IPEndPoint(DAP_ip, port);
 
-            UpdateText(port);
-
             //call listen method
             dapEmulatorComm = new DAPEmulatorComm(this, socketWatch);
             //bind delegate
-            dapEmulatorComm.threadDelegate = new DelegateCollection.updateUIControl(UpdateControl);
+            dapEmulatorComm.threadDelegate = new DelegateCollection.updateUIControlDelegate(UpdateControl);
             Thread subThread = new Thread(new ParameterizedThreadStart(dapEmulatorComm.Listen));
             subThread.IsBackground = true;
             subThread.Start(endPoint);
@@ -117,15 +121,6 @@ namespace DAPEmulator
                 DisplayLog(logList[0], false, logList[2]);
             }
 
-        }
-
-        private void UpdateText(int port)
-        {
-            this.ip.Text = GetAddressIP();
-            Application.DoEvents();
-
-            this.port.Text = port.ToString();
-            Application.DoEvents();
         }
 
         /// <summary>
@@ -147,7 +142,7 @@ namespace DAPEmulator
             return logContent;
         }
 
-
+        //binded by updateUIControlDelegate
         public void UpdateControl(string logContent, bool flag, string pointStr)
         {
             string temp = " from ";
@@ -251,6 +246,13 @@ namespace DAPEmulator
         private void msgReceive_TextChanged(object sender, EventArgs e)
         {
 
+        }
+
+        private void DAPEmulatorUI_Load(object sender, EventArgs e)
+        {
+            this.ip.Text = GetAddressIP();
+            this.port.Text = "1111";
+            Application.DoEvents();
         }
     }
 }

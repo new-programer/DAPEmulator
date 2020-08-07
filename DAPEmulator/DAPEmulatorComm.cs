@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using DAPClibrary;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -15,7 +16,7 @@ namespace DAPEmulator
 
     class DAPEmulatorComm
     {
-        public DelegateCollection.updateUIControl threadDelegate;
+        public DelegateCollection.updateUIControlDelegate threadDelegate;
 
         DAPEmulatorUI emulatorUI = new DAPEmulatorUI();
         Utils utils = new Utils();
@@ -93,9 +94,9 @@ namespace DAPEmulator
                 commThread = new CommThread(emulatorUI, commSocket);
 
                 //create a thread for receiving packet from client
-                Thread threadReceive = new Thread(new ThreadStart(commThread.RunThread));
+                Thread threadReceive = new Thread(new ParameterizedThreadStart(commThread.RunThread));
                 threadReceive.IsBackground = true;
-                threadReceive.Start();
+                threadReceive.Start(threadDelegate);
             }
         }
 

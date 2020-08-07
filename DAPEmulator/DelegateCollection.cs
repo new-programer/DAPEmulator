@@ -6,8 +6,11 @@ using System.Threading.Tasks;
 
 namespace DAPEmulator
 {
+    public delegate void updateUIControl(string logContent, bool flag, string pointStr);
+
+
     public class DelegateCollection
     {
-        public delegate void updateUIControl(string logContent, bool flag, string pointStr);
+        public delegate void updateUIControlDelegate(string logContent, bool flag, string pointStr);
     }
 }
