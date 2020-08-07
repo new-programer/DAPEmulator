@@ -205,13 +205,13 @@ namespace DAPClient
             try
             {
                 string command = "TST";
-
+/*
                 string tempText = this.msgText.Text;
                 if (!tempText.Equals(""))
                 {
                     command = tempText;
                 }
-
+*/
                 Dictionary<string, string> paraDict = new Dictionary<string, string>
                 {
                     {"data", command},
@@ -220,6 +220,9 @@ namespace DAPClient
                 dapProtocol = new DAPProtocol(command, paraDict);
 
                 string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
+
+
+
 
                 byte[] buffer = new byte[2048];
                 buffer = Encoding.Default.GetBytes(json);
@@ -230,7 +233,7 @@ namespace DAPClient
             }
             catch (Exception ex)
             {
-                MessageBox.Show("data send exception：\n" + ex.Message);
+                _ = MessageBox.Show("data send exception：\n" + ex.Message);
             }
         }
 

@@ -4,11 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace DAPPacket
+namespace DAPClibrary
 {
     public class DAPCommand
     {
-        //for checking up validty of communicating data
+        //for checking up validaty of communicating data
         public const string key = "DAP";
 
         public string command { get; set; }
