@@ -44,10 +44,12 @@ namespace DAPClibrary
         /// </summary>
         /// <param name="dataDicts"></param>
         /// <param name="buffer"></param>
-        public void JsonDataOperation(DAPProtocol protocol, byte[] buffer)
+        public byte[] JsonDataOperationProtocol(DAPProtocol protocol)
         {
+            byte[] buffer = new byte[2048];
             String json = JsonConvert.SerializeObject(protocol, Formatting.Indented);
             buffer = Encoding.Default.GetBytes(json);
+            return buffer;
         }
 
         /// <summary>

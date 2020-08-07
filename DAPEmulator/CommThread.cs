@@ -77,11 +77,11 @@ namespace DAPEmulator
 
                             factDict = new Dictionary<string, string>
                             {
-                                {"data", " "}
+                                {"data", command}
                             };
 
                             dapProtocol = new DAPProtocol("TST", factDict);
-                            utils.JsonDataOperation(dapProtocol, buffer);
+                            buffer = utils.JsonDataOperationProtocol(dapProtocol);
                             commSocket.Send(buffer);
 
                             if (threadDelegate != null)
@@ -102,7 +102,7 @@ namespace DAPEmulator
                                 {"data", dataContent}
                             };
                             dapProtocol = new DAPProtocol("%RFD", factDict);
-                            utils.JsonDataOperation(factDict, buffer);
+                            buffer = utils.JsonDataOperationProtocol(dapProtocol);
                             commSocket.Send(buffer);
 
                             if (threadDelegate != null)
@@ -134,8 +134,9 @@ namespace DAPEmulator
                             {
                                 {"data", dataContent}
                             };
+
                             dapProtocol = new DAPProtocol("%SFD", factDict);
-                            utils.JsonDataOperation(factDict, buffer);
+                            buffer = utils.JsonDataOperationProtocol(dapProtocol);
                             commSocket.Send(buffer);
 
                             if (threadDelegate != null)
@@ -158,14 +159,18 @@ namespace DAPEmulator
                                 {"AirPressure", dapParameters.AirPressure.ToString()},
                                 {"Temperature", dapParameters.Temperature.ToString()},
                             };
-                            dapProtocol = new DAPProtocol("%RFD", factDict);
-                            utils.JsonDataOperation(factDict, buffer);
-                            commSocket.Send(buffer);
+
 
                             if (threadDelegate != null)
                             {
                                 threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
                             }
+
+                            dapProtocol = new DAPProtocol("LoadAllData", factDict);
+                            buffer = utils.JsonDataOperationProtocol(dapProtocol);
+                            commSocket.Send(buffer);
+
+
                             break;
 
                         case "reset":
@@ -182,8 +187,8 @@ namespace DAPEmulator
                                 {"AirPressure", dapParameters.AirPressure.ToString()},
                                 {"Temperature", dapParameters.Temperature.ToString()},
                             };
-                            dapProtocol = new DAPProtocol("%RFD", factDict);
-                            utils.JsonDataOperation(factDict, buffer);
+                            dapProtocol = new DAPProtocol("reset", factDict);
+                            buffer = utils.JsonDataOperationProtocol(dapProtocol);
                             commSocket.Send(buffer);
 
                             if (threadDelegate != null)
@@ -218,8 +223,8 @@ namespace DAPEmulator
                             {
                                 {"data",dataContent}
                             };
-                            dapProtocol = new DAPProtocol("%RFD", factDict);
-                            utils.JsonDataOperation(factDict, buffer);
+                            dapProtocol = new DAPProtocol("savePT", factDict);
+                            buffer = utils.JsonDataOperationProtocol(dapProtocol);
                             commSocket.Send(buffer);
 
                             if (threadDelegate != null)
@@ -245,8 +250,8 @@ namespace DAPEmulator
                                 {"data", dataContent}
                             };
 
-                            dapProtocol = new DAPProtocol("%RFD", factDict);
-                            utils.JsonDataOperation(factDict, buffer);
+                            dapProtocol = new DAPProtocol("Validate", factDict);
+                            buffer = utils.JsonDataOperationProtocol(dapProtocol);
                             commSocket.Send(buffer);
 
                             if (threadDelegate != null)

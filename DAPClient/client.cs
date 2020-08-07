@@ -22,7 +22,11 @@ namespace DAPClient
             InitializeComponent();
         }
 
+        //declare DAPProtocol
         DAPProtocol dapProtocol;
+        string command;
+        Dictionary<string, string> paraDict;
+        
 
 
         private delegate void SetTextCallBack(string strValue);
@@ -31,7 +35,7 @@ namespace DAPClient
         private delegate void ReceiveMsgCallBack(string strMsg);
         private ReceiveMsgCallBack receiveCallBack;
 
-        
+
         Socket socketSend;//Socket for creating connecing
         Thread threadReceive; //Socket for receiving data from DAPEmulator
 
@@ -59,12 +63,12 @@ namespace DAPClient
                 this.clientLog.Invoke(setCallBack, "[" + DateTime.Now.ToString() + "] connect successfully!");
 
                 //create a new thread for communicating
-                threadReceive = new Thread(new ThreadStart(Receive));
+                threadReceive = new Thread(new ParameterizedThreadStart(Receive));
 
                 threadReceive.IsBackground = true;
-                threadReceive.Start();
+                threadReceive.Start(socketSend);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 MessageBox.Show("DAP_emulator connection error: \n" + ex.Message);
             }
@@ -78,15 +82,17 @@ namespace DAPClient
         /// <summary>
         /// receive data from DAPEmulator
         /// </summary>
-        private void Receive()
+        private void Receive(object socketSend)
         {
+            Socket commSocket = socketSend as Socket;
+
             try
             {
                 while (true)
                 {
                     byte[] buffer = new byte[2048];
 
-                    int count = socketSend.Receive(buffer);
+                    int count = commSocket.Receive(buffer);
 
 
                     if (count == 0)
@@ -96,32 +102,45 @@ namespace DAPClient
                     else
                     {
                         string jsonStr = Encoding.Default.GetString(buffer, 0, count);
-                        Dictionary<string, string> paraDict = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonStr);
+                        dapProtocol = JsonConvert.DeserializeObject<DAPProtocol>(jsonStr);
+                        command = dapProtocol.Head;
+                        paraDict = dapProtocol.Body;
 
-                        if (paraDict["data"].Equals(""))
+
+                        if (command.Equals(""))
                         {
                             MessageBox.Show("do not get the value of 'DAP_corr_fctor'");
                         }
                         else
                         {
-                            string tempStr = paraDict["data"];
+                            string tempMsg = "[" + DateTime.Now.ToString() + "] from " + commSocket.RemoteEndPoint + ":" + command;
+                            clientLog.Invoke(receiveCallBack, tempMsg);
 
-                            if (tempStr.StartsWith("allData") || tempStr.StartsWith("reset"))
+                            switch (command)
                             {
-                                if (tempStr.StartsWith("allData"))
-                                {
-                                    tempStr = tempStr.Remove(0, 7);
-                                }
-                                else if (tempStr.StartsWith("reset"))
-                                {
-                                    tempStr = tempStr.Remove(0, 5);
-                                    Dictionary<string, string> allData = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempStr);
+                                case "LoadAllData":
 
-                                    sw_version = allData["sw_version"];
-                                    InternalSN = allData["InternalSN"];
-                                    CorrectionFactor = double.Parse(allData["CorrectionFactor"]);
-                                    AirPressure = int.Parse(allData["AirPressure"]);
-                                    Temperature = int.Parse(allData["Temperature"]);
+                                    sw_version = paraDict["sw_version"];
+                                    InternalSN = paraDict["InternalSN"];
+                                    CorrectionFactor = double.Parse(paraDict["CorrectionFactor"]);
+                                    AirPressure = int.Parse(paraDict["AirPressure"]);
+                                    Temperature = int.Parse(paraDict["Temperature"]);
+
+                                    version.Text = sw_version.Trim();
+                                    sn.Text = InternalSN;
+                                    factor.Text = CorrectionFactor.ToString();
+                                    pressure.Text = AirPressure.ToString();
+                                    T.Text = Temperature.ToString();
+                                    Application.DoEvents();//refresh textbox
+
+                                    break;
+
+                                case "reset":
+                                    sw_version = paraDict["sw_version"];
+                                    InternalSN = paraDict["InternalSN"];
+                                    CorrectionFactor = double.Parse(paraDict["CorrectionFactor"]);
+                                    AirPressure = int.Parse(paraDict["AirPressure"]);
+                                    Temperature = int.Parse(paraDict["Temperature"]);
 
                                     version.Text = sw_version.Trim();
                                     sn.Text = InternalSN;
@@ -129,44 +148,35 @@ namespace DAPClient
                                     pressure.Text = AirPressure.ToString();
                                     T.Text = Temperature.ToString();
 
-                                    Application.DoEvents();//使textbook 立即刷新刚赋的值
-
-                                }
-                                else if (tempStr.StartsWith("savePT"))
-                                {
-                                    tempStr = tempStr.Remove(0, 6);
-                                    MessageBox.Show(tempStr);
-                                }
-                                else if (tempStr.StartsWith("success") || tempStr.StartsWith("failure"))
-                                {
-                                    tempStr = tempStr.Remove(0, 8);
-
-                                    MessageBox.Show(tempStr);
-                                }
-                                else if (tempStr.StartsWith("%SFD"))
-                                {
-                                    tempStr = tempStr.Remove(0, 4);
-                                    MessageBox.Show("now Correction Factor is: " + tempStr);
-                                }
-                                else if (tempStr.StartsWith("%RFD"))
-                                {
-                                    tempStr = tempStr.Remove(0, 4);
-                                    //this.dapFactor.Text = tempStr.ToString();
-
-                                    double tempCorrectionFactor = double.Parse(tempStr);
-
-                                    tempCorrectionFactor = 1 / (1 + 0.0451) * tempCorrectionFactor;
-
                                     Application.DoEvents();
-                                }
-                                else if (tempStr.Equals("TST"))
-                                {
-                                    string str = "[" + DateTime.Now.ToString() + "] from " + socketSend.RemoteEndPoint + ":" + tempStr;
-                                    this.clientLog.Invoke(receiveCallBack, str);
-                                    MessageBox.Show("stability test successfully");
-                                }
 
+                                    break;
+
+                                case "savePT":
+                                    MessageBox.Show(paraDict["data"]);
+                                    break;
+
+                                case "%RFD":
+                                    double tempCorrectionFactor = double.Parse(paraDict["data"]);
+                                    tempCorrectionFactor = 1 / (1 + 0.0451) * tempCorrectionFactor;
+                                    Application.DoEvents();
+                                    break;
+
+                                case "%SFD":
+                                    MessageBox.Show("now Correction Factor is: " + paraDict["data"]);
+                                    break;
+
+                                case "TST":
+                                    MessageBox.Show("stability test successfully");
+                                    break;
+
+                                default:
+                                    MessageBox.Show("invalid command");
+                                    break;
                             }
+
+                            string log = "[" + DateTime.Now.ToString() + "] from " + commSocket.RemoteEndPoint + ":" + command;
+                            clientLog.Invoke(receiveCallBack, log);
                         }
                     }
                 }
@@ -205,14 +215,14 @@ namespace DAPClient
             try
             {
                 string command = "TST";
-/*
+
                 string tempText = this.msgText.Text;
                 if (!tempText.Equals(""))
                 {
                     command = tempText;
                 }
-*/
-                Dictionary<string, string> paraDict = new Dictionary<string, string>
+
+                paraDict = new Dictionary<string, string>
                 {
                     {"data", command},
                 };
@@ -221,19 +231,16 @@ namespace DAPClient
 
                 string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
 
-
-
-
                 byte[] buffer = new byte[2048];
                 buffer = Encoding.Default.GetBytes(json);
                 int receive = socketSend.Send(buffer);
 
                 string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + paraDict["data"];
-                clientLog.Invoke(receiveCallBack, tempMsg); 
+                clientLog.Invoke(receiveCallBack, tempMsg);
             }
             catch (Exception ex)
             {
-                _ = MessageBox.Show("data send exception：\n" + ex.Message);
+                MessageBox.Show("data send exception：\n" + ex.Message);
             }
         }
 
@@ -251,20 +258,23 @@ namespace DAPClient
         {
             try
             {
-                string msgStr = "%RFD";
+                string command = "%RFD";
 
-                Dictionary<string, string> paraDict = new Dictionary<string, string>
+                paraDict = new Dictionary<string, string>
                 {
-                    {"data", msgStr}
+                    {"data", command}
                 };
 
-                string json = JsonConvert.SerializeObject(paraDict, Formatting.Indented);
+                dapProtocol = new DAPProtocol(command, paraDict);
+
+                string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
+
 
                 byte[] buffer = new byte[2048];
                 buffer = Encoding.Default.GetBytes(json);
                 int receive = socketSend.Send(buffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + msgStr;
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
                 clientLog.Invoke(receiveCallBack, tempMsg);
 
             }
@@ -306,19 +316,21 @@ namespace DAPClient
             {
                 string command = "LoadAllData";
 
-                Dictionary<string, string> commDict = new Dictionary<string, string>
+                paraDict = new Dictionary<string, string>
                 {
                     {"data", command}
                 };
 
-                string json = JsonConvert.SerializeObject(commDict, Formatting.Indented);
+                dapProtocol = new DAPProtocol(command, paraDict);
+
+                string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
 
                 byte[] commBuffer = new byte[2048];
                 commBuffer = Encoding.Default.GetBytes(json);
                 int len = socketSend.Send(commBuffer);
 
                 string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
-                clientLog.Invoke(receiveCallBack, tempMsg); 
+                clientLog.Invoke(receiveCallBack, tempMsg);
             }
             catch (Exception ex)
             {
@@ -345,21 +357,21 @@ namespace DAPClient
                         string tempCorrectioFactor = this.factor.Text;
 
                         //string command = "%SFD" + CorrectionFactor.ToString();
-                        string msgStr = "%SFD" + tempCorrectioFactor;
-
-                        Dictionary<string, string> paraDict = new Dictionary<string, string>
+                        string command = "%SFD" + tempCorrectioFactor;
+                        paraDict = new Dictionary<string, string>
                         {
-                            {"data", msgStr}
+                            {"data", command}
                         };
 
-                        string json = JsonConvert.SerializeObject(paraDict, Formatting.Indented);
+                        dapProtocol = new DAPProtocol(command, paraDict);
+                        string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
 
                         byte[] buffer = new byte[2048];
                         buffer = Encoding.Default.GetBytes(json);
                         int receive = socketSend.Send(buffer);
 
-                        string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + msgStr;
-                        clientLog.Invoke(receiveCallBack, tempMsg); 
+                        string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
+                        clientLog.Invoke(receiveCallBack, tempMsg);
                     }
                 }
                 catch (Exception ex)
@@ -384,19 +396,20 @@ namespace DAPClient
             {
                 string command = commamd;
 
-                Dictionary<string, string> commDict = new Dictionary<string, string>
+                paraDict= new Dictionary<string, string>
                 {
                     {"data", command}
                 };
 
-                string json = JsonConvert.SerializeObject(commDict, Formatting.Indented);
+                dapProtocol = new DAPProtocol(command, paraDict);
+                string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
 
                 byte[] commBuffer = new byte[2048];
                 commBuffer = Encoding.Default.GetBytes(json);
                 int len = socketSend.Send(commBuffer);
 
                 string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
-                clientLog.Invoke(receiveCallBack, tempMsg); 
+                clientLog.Invoke(receiveCallBack, tempMsg);
             }
             catch (Exception ex)
             {
