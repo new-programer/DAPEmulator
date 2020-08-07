@@ -9,6 +9,7 @@ using System.Net;
 using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Management.Instrumentation;
+using DAPClibrary;
 
 namespace DAPEmulator
 {
@@ -17,9 +18,14 @@ namespace DAPEmulator
     public delegate void ReceiveMsgCallBack(string strReceive);
     public delegate void FactorText(string value);
 
+
+
     public partial class DAPEmulatorUI : Form
     {
+        EndPoint point;
         DAPEmulatorUI emulatorUI;
+        DAPProtocol dapProtocol;
+        Utils utils;
 
         /*create an instance of class named DAPEmulatorComm */
         DAPEmulatorComm dapEmulatorComm;
@@ -28,15 +34,17 @@ namespace DAPEmulator
         /*declare delegate*/ 
         SetTextValueCallBack setCallBack;
         ReceiveMsgCallBack receiveCallBack;
+        DelegateCollection.updateUIControlDelegate UpdateUIDelegate;
+        DelegateCollection.updateUIControlDelegate threadDelegate;
 
 
-        //declare sockets for listening and sending packets
-        Socket socketSend;
-        Socket socketWatch;
+         //declare sockets for listening and sending packets
+        Socket commSocket;
+        Socket listenSocket;
 
         //declare threads for listening connection created by client and accepting packets from client 
         Thread serverListenThread;
-        Thread packetReceiveThread;
+        Thread commThread;
 
 
         /// <summary>
@@ -52,6 +60,8 @@ namespace DAPEmulator
             this.version.Text = dapParameters.sw_version;
             this.sn.Text = dapParameters.InternalSN;
             this.factor.Text = dapParameters.CorrectionFactor.ToString();
+            //bind method
+            UpdateUIDelegate = new DelegateCollection.updateUIControlDelegate(this.UpdateControl);
         }
 
 
@@ -85,24 +95,299 @@ namespace DAPEmulator
 
         private void StartListen(object sender, EventArgs e)
         {
-            socketWatch = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
             //IPAddress ip = IPAddress.Parse(this.ip.Text.Trim());
-            IPAddress DAP_ip = IPAddress.Parse(GetAddressIP());
+            IPAddress DAP_ip = IPAddress.Parse(this.ip.Text.Trim());
             int port = CheckPortValue(this.port.Text.Trim()); //default value 
 
             IPEndPoint endPoint = new IPEndPoint(DAP_ip, port);
 
-            UpdateText(port);
-
             //call listen method
-            dapEmulatorComm = new DAPEmulatorComm(this, socketWatch);
+            dapEmulatorComm = new DAPEmulatorComm(this, listenSocket);
             //bind delegate
-            dapEmulatorComm.threadDelegate = new DelegateCollection.updateUIControl(UpdateControl);
+            dapEmulatorComm.threadDelegate = new DelegateCollection.updateUIControlDelegate(UpdateControl);
             Thread subThread = new Thread(new ParameterizedThreadStart(dapEmulatorComm.Listen));
             subThread.IsBackground = true;
             subThread.Start(endPoint);
 
+        }
+
+        /*---------------------------method-------------------------------*/
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <param name="port"></param>
+        public void Listen(object endPoint)
+        {
+            EndPoint point = endPoint as IPEndPoint;
+            listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+            listenSocket.Bind(point);
+            listenSocket.Listen(10);
+
+            //create an instance of thread for listening
+            //serverListenThread = new Thread(new ParameterizedThreadStart(StartListenMethod));
+            //serverListenThread.IsBackground = true;
+            //serverListenThread.Start(listenSocket);
+
+
+            StartListenMethod(listenSocket);
+
+        }
+
+        /// <summary>
+        /// method for waiting for connection from client and communicating with client
+        /// <param name="obj"></param>
+        private void StartListenMethod(object obj)
+        {
+            Socket listenSocket = obj as Socket;
+            //emulatorUI.DisplayLog("listen successfully!", true, point.ToString());
+
+            if (UpdateUIDelegate != null)
+            {
+                UpdateUIDelegate("listen successfully!", true, point.ToString());
+            }
+
+            while (true)
+            {
+                commSocket = listenSocket.Accept();
+
+                string ipStr = commSocket.RemoteEndPoint.ToString();
+                emulatorUI.ip.Text = ipStr;
+                Application.DoEvents();
+
+                UpdateControl("connect successfully!", true, ipStr);
+
+
+                //create a thread for receiving packet from client
+                Thread threadReceive = new Thread(new ParameterizedThreadStart(RunThread));
+                threadReceive.IsBackground = true;
+
+                threadReceive.Start(UpdateUIDelegate);
+            }
+        }
+
+        /// <summary> 
+        ///  method for receiving and processing packets from client in a loop;
+        ///  there are different prefixes in data string:
+        ///  "%SFD", it is used to write Correction Factor of DAP to DAP Emulator;
+        ///  
+        /// </summary>
+        /// <param name="obj"></param>
+        public void RunThread(object UpdataUIDelegate)
+        {
+            threadDelegate = UpdataUIDelegate as DelegateCollection.updateUIControlDelegate;
+            Dictionary<string, string> factDict;
+
+            string jsonStr = string.Empty;
+            string command = string.Empty;
+            string dataContent = string.Empty;
+            string logStr = string.Empty;
+
+            while (true)
+            {
+                byte[] buffer = new byte[2048];
+
+                int count = commSocket.Receive(buffer);
+
+                if (count == 0)
+                {
+                    break;
+                }
+                else
+                {
+                    jsonStr = Encoding.Default.GetString(buffer, 0, count);
+                    dapProtocol = JsonConvert.DeserializeObject<DAPProtocol>(jsonStr);
+                    command = dapProtocol.Head;
+                    switch (command)
+                    {
+                        case "TST":
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
+
+                            dapProtocol = new DAPProtocol("TST", null);
+                            utils.JsonDataOperation(dapProtocol, buffer);
+                            commSocket.Send(buffer);
+
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
+                            break;
+
+                        case "%RFD":
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
+
+                            dataContent = dapParameters.CorrectionFactor.ToString();
+                            factDict = new Dictionary<string, string>
+                            {
+                                {"data", dataContent}
+                            };
+                            dapProtocol = new DAPProtocol("%RFD", factDict);
+                            utils.JsonDataOperation(factDict, buffer);
+                            commSocket.Send(buffer);
+
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
+                            break;
+
+                        case "%SFD":
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
+
+                            double tempCorrectionFactor = double.Parse(dapProtocol.Body["CorrectionFactor"]);
+                            if ((int)(tempCorrectionFactor * 100) != (int)(dapParameters.CorrectionFactor * 100))
+                            {
+                                dapParameters.CorrectionFactor = tempCorrectionFactor;
+                                emulatorUI.factor.Text = dapParameters.CorrectionFactor.ToString();
+                                Application.DoEvents();
+
+                                dataContent = "Correction factor save successfully";
+                            }
+                            else
+                            {
+                                dataContent = "Correction factor does not change";
+                            }
+                            factDict = new Dictionary<string, string>
+                            {
+                                {"data", dataContent}
+                            };
+                            dapProtocol = new DAPProtocol("%SFD", factDict);
+                            utils.JsonDataOperation(factDict, buffer);
+                            commSocket.Send(buffer);
+
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
+                            break;
+
+                        case "LoadAllData":
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
+
+                            factDict = new Dictionary<string, string>
+                            {
+                                {"sw_version", dapParameters.sw_version},
+                                {"InternalSN", dapParameters.InternalSN},
+                                {"CorrectionFactor", dapParameters.CorrectionFactor.ToString()},
+                                {"AirPressure", dapParameters.AirPressure.ToString()},
+                                {"Temperature", dapParameters.Temperature.ToString()},
+                            };
+                            dapProtocol = new DAPProtocol("%RFD", factDict);
+                            utils.JsonDataOperation(factDict, buffer);
+                            commSocket.Send(buffer);
+
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
+                            break;
+
+                        case "reset":
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
+
+                            factDict = new Dictionary<string, string>
+                            {
+                                {"sw_version", dapParameters.sw_version},
+                                {"InternalSN", dapParameters.InternalSN},
+                                {"CorrectionFactor", dapParameters.CorrectionFactor.ToString()},
+                                {"AirPressure", dapParameters.AirPressure.ToString()},
+                                {"Temperature", dapParameters.Temperature.ToString()},
+                            };
+                            dapProtocol = new DAPProtocol("%RFD", factDict);
+                            utils.JsonDataOperation(factDict, buffer);
+                            commSocket.Send(buffer);
+
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
+
+                            break;
+
+                        case "savePT":
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
+
+                            int tempAirPressure = int.Parse(dapProtocol.Body["AirPressure"]);
+                            int tempTemperature = int.Parse(dapProtocol.Body["Temperature"]);
+
+                            if ((tempAirPressure != dapParameters.AirPressure) || (tempTemperature != dapParameters.Temperature))
+                            {
+                                dapParameters.AirPressure = tempAirPressure;
+                                dapParameters.Temperature = tempTemperature;
+
+                                dataContent = "save successfully";
+                            }
+                            else
+                            {
+                                dataContent = "the value of pressure or temperature does not change";
+                            }
+
+                            factDict = new Dictionary<string, string>
+                            {
+                                {"data",dataContent}
+                            };
+                            dapProtocol = new DAPProtocol("%RFD", factDict);
+                            utils.JsonDataOperation(factDict, buffer);
+                            commSocket.Send(buffer);
+
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
+                            break;
+                        case "Validate":
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
+                            }
+
+                            double tempFactor = double.Parse(dapProtocol.Body["CorrectionFactor"]);
+                            dataContent = "success,Validate Successfully";
+                            if ((tempFactor < 2.50) && (tempFactor > 0.25))
+                            {
+                                dataContent = "failure,sorry, inputed correction factor is not within tolerance";
+                            }
+
+                            factDict = new Dictionary<string, string>
+                            {
+                                {"data", dataContent}
+                            };
+
+                            dapProtocol = new DAPProtocol("%RFD", factDict);
+                            utils.JsonDataOperation(factDict, buffer);
+                            commSocket.Send(buffer);
+
+                            if (threadDelegate != null)
+                            {
+                                threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
         }
 
         public void OnConnected(Object state)
@@ -117,15 +402,6 @@ namespace DAPEmulator
                 DisplayLog(logList[0], false, logList[2]);
             }
 
-        }
-
-        private void UpdateText(int port)
-        {
-            this.ip.Text = GetAddressIP();
-            Application.DoEvents();
-
-            this.port.Text = port.ToString();
-            Application.DoEvents();
         }
 
         /// <summary>
@@ -147,7 +423,7 @@ namespace DAPEmulator
             return logContent;
         }
 
-
+        //binded by updateUIControlDelegate
         public void UpdateControl(string logContent, bool flag, string pointStr)
         {
             string temp = " from ";
@@ -173,9 +449,9 @@ namespace DAPEmulator
         {
             String json = JsonConvert.SerializeObject(dataDicts, Formatting.Indented);
             buffer = Encoding.Default.GetBytes(json);
-            int charLen = socketSend.Send(buffer);
+            int charLen = commSocket.Send(buffer);
 
-            string tempMsg = "[" + DateTime.Now.ToString() + "]" + logStr + socketSend.RemoteEndPoint;
+            string tempMsg = "[" + DateTime.Now.ToString() + "]" + logStr + commSocket.RemoteEndPoint;
             //msgReceive.Invoke(receiveCallBack, tempMsg);
 
            // DisplayLog(tempMsg);
@@ -191,11 +467,11 @@ namespace DAPEmulator
         /// <param name="e"></param>
         private void StopListen(object sender, EventArgs e)
         {
-            socketWatch.Close();
-            socketSend.Close();
+            listenSocket.Close();
+            commSocket.Close();
 
             serverListenThread.Abort();
-            packetReceiveThread.Abort();
+            commThread.Abort();
         }
 
 
@@ -251,6 +527,13 @@ namespace DAPEmulator
         private void msgReceive_TextChanged(object sender, EventArgs e)
         {
 
+        }
+
+        private void DAPEmulatorUI_Load(object sender, EventArgs e)
+        {
+            this.ip.Text = GetAddressIP();
+            this.port.Text = "1111";
+            Application.DoEvents();
         }
     }
 }

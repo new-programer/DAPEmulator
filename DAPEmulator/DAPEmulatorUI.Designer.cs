@@ -213,6 +213,7 @@
             this.Margin = new System.Windows.Forms.Padding(4);
             this.Name = "DAPEmulatorUI";
             this.Text = "DAPEmulatorUI";
+            this.Load += new System.EventHandler(this.DAPEmulatorUI_Load);
             this.ResumeLayout(false);
             this.PerformLayout();
 

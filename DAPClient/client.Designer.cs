@@ -1,4 +1,4 @@
-﻿namespace SocketClient
+﻿namespace DAPClient
 {
     partial class client
     {

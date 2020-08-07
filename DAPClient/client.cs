@@ -6,15 +6,15 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Net;
 using Newtonsoft.Json;
+using DAPClibrary;
 
-namespace SocketClient
+namespace DAPClient
 {
     public partial class client : Form
     {
         public client()
         {
-            /*这条语句存在的意义：解除异常（线程间操作无效：从不是创建控件“dapFactor”的线程访问它........）
-             * 这只是一种解决方法，还有一种方法是通过委托机制来解决，具体见链接： https://blog.csdn.net/weixin_44913038/article/details/102996655
+            /*click https://blog.csdn.net/weixin_44913038/article/details/102996655
              */
             System.Windows.Forms.Control.CheckForIllegalCrossThreadCalls = false;
 
@@ -25,35 +25,24 @@ namespace SocketClient
         DAPProtocol dapProtocol;
 
 
-        //定义回调
         private delegate void SetTextCallBack(string strValue);
-        //声明
         private SetTextCallBack setCallBack;
 
-        //定义接收服务端发送消息的回调
         private delegate void ReceiveMsgCallBack(string strMsg);
-        //声明
         private ReceiveMsgCallBack receiveCallBack;
 
-        //创建连接的Socket
-        Socket socketSend;
+        
+        Socket socketSend;//Socket for creating connecing
+        Thread threadReceive; //Socket for receiving data from DAPEmulator
 
-        //创建接收客户端发送消息的线程
-        Thread threadReceive;
-
-        //定义 DAP factor
-        //int DAP_corr_factor = -100;
-
-       /* 临时定义和DAP相关的所有参数*/
-        //double DAP_corr_factor = 1.00; //定义 DAP 校正因子 默认为 1.00
-        string sw_version = ""; //版本号
-        string InternalSN = (DateTime.Now - new DateTime(1970, 1, 1, 0, 0, 0, 0)).ToString(); //序列号
-        double CorrectionFactor = -1.00;//校正因子
-        int AirPressure = 1013;  //气压，默认值 1013Pa
-        int Temperature = 20;  //温度，默认值 20`C / 293.15K
+        string sw_version = "";
+        string InternalSN = (DateTime.Now - new DateTime(1970, 1, 1, 0, 0, 0, 0)).ToString();
+        double CorrectionFactor = -1.00;
+        int AirPressure = 1013;
+        int Temperature = 20;
 
         /// <summary>
-        /// 创建网络通信连接
+        /// create an socket connection
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
@@ -65,15 +54,13 @@ namespace SocketClient
                 IPAddress ip = IPAddress.Parse(this.ipAddress.Text.Trim());
                 socketSend.Connect(ip, Convert.ToInt32(this.port.Text.Trim()));
 
-                //实例化回调
                 setCallBack = new SetTextCallBack(SetValue);
                 receiveCallBack = new ReceiveMsgCallBack(SetValue);
                 this.clientLog.Invoke(setCallBack, "[" + DateTime.Now.ToString() + "] connect successfully!");
 
-                //开启一个新的线程不停的接收服务器发送消息的线程
+                //create a new thread for communicating
                 threadReceive = new Thread(new ThreadStart(Receive));
 
-                //设置为后台线程
                 threadReceive.IsBackground = true;
                 threadReceive.Start();
             }
@@ -89,7 +76,7 @@ namespace SocketClient
         }
 
         /// <summary>
-        /// 接收 模拟器 发送的数据
+        /// receive data from DAPEmulator
         /// </summary>
         private void Receive()
         {
@@ -98,19 +85,19 @@ namespace SocketClient
                 while (true)
                 {
                     byte[] buffer = new byte[2048];
-                    //实际接收到的字节数
+
                     int count = socketSend.Receive(buffer);
+
+
                     if (count == 0)
                     {
                         break;
                     }
                     else
                     {
-                        /*获取DAP_emulator 发来的数据*/
                         string jsonStr = Encoding.Default.GetString(buffer, 0, count);
                         Dictionary<string, string> paraDict = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonStr);
 
-                        //解析收到的信息
                         if (paraDict["data"].Equals(""))
                         {
                             MessageBox.Show("do not get the value of 'DAP_corr_fctor'");
@@ -123,72 +110,70 @@ namespace SocketClient
                             {
                                 if (tempStr.StartsWith("allData"))
                                 {
-                                    tempStr = tempStr.Remove(0, 7); //去掉前缀 “allData”
+                                    tempStr = tempStr.Remove(0, 7);
                                 }
                                 else if (tempStr.StartsWith("reset"))
                                 {
-                                    tempStr = tempStr.Remove(0, 5); //去掉前缀 “reset”
+                                    tempStr = tempStr.Remove(0, 5);
+                                    Dictionary<string, string> allData = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempStr);
+
+                                    sw_version = allData["sw_version"];
+                                    InternalSN = allData["InternalSN"];
+                                    CorrectionFactor = double.Parse(allData["CorrectionFactor"]);
+                                    AirPressure = int.Parse(allData["AirPressure"]);
+                                    Temperature = int.Parse(allData["Temperature"]);
+
+                                    version.Text = sw_version.Trim();
+                                    sn.Text = InternalSN;
+                                    factor.Text = CorrectionFactor.ToString();
+                                    pressure.Text = AirPressure.ToString();
+                                    T.Text = Temperature.ToString();
+
+                                    Application.DoEvents();//使textbook 立即刷新刚赋的值
+
                                 }
-                                Dictionary<string, string> allData = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempStr);
+                                else if (tempStr.StartsWith("savePT"))
+                                {
+                                    tempStr = tempStr.Remove(0, 6);
+                                    MessageBox.Show(tempStr);
+                                }
+                                else if (tempStr.StartsWith("success") || tempStr.StartsWith("failure"))
+                                {
+                                    tempStr = tempStr.Remove(0, 8);
 
-                                //从获取的 allData 中取出每个数据展示在界面上
-                                sw_version = allData["sw_version"];
-                                InternalSN = allData["InternalSN"];
-                                CorrectionFactor = double.Parse(allData["CorrectionFactor"]);
-                                AirPressure = int.Parse(allData["AirPressure"]);
-                                Temperature = int.Parse(allData["Temperature"]);
+                                    MessageBox.Show(tempStr);
+                                }
+                                else if (tempStr.StartsWith("%SFD"))
+                                {
+                                    tempStr = tempStr.Remove(0, 4);
+                                    MessageBox.Show("now Correction Factor is: " + tempStr);
+                                }
+                                else if (tempStr.StartsWith("%RFD"))
+                                {
+                                    tempStr = tempStr.Remove(0, 4);
+                                    //this.dapFactor.Text = tempStr.ToString();
 
-                                version.Text = sw_version.Trim();
-                                sn.Text = InternalSN;
-                                factor.Text = CorrectionFactor.ToString();
-                                pressure.Text = AirPressure.ToString();
-                                T.Text = Temperature.ToString();
+                                    double tempCorrectionFactor = double.Parse(tempStr);
 
-                                Application.DoEvents();//使textbook 立即刷新刚赋的值
+                                    tempCorrectionFactor = 1 / (1 + 0.0451) * tempCorrectionFactor;
+
+                                    Application.DoEvents();
+                                }
+                                else if (tempStr.Equals("TST"))
+                                {
+                                    string str = "[" + DateTime.Now.ToString() + "] from " + socketSend.RemoteEndPoint + ":" + tempStr;
+                                    this.clientLog.Invoke(receiveCallBack, str);
+                                    MessageBox.Show("stability test successfully");
+                                }
 
                             }
-                            else if (tempStr.StartsWith("savePT"))
-                            {
-                                tempStr = tempStr.Remove(0, 6);
-                                MessageBox.Show(tempStr);
-                            }
-                            else if (tempStr.StartsWith("success") || tempStr.StartsWith("failure"))
-                            {
-                                tempStr = tempStr.Remove(0, 8); //去掉success,或failure,
-
-                                MessageBox.Show(tempStr);
-                            }
-                            else if (tempStr.StartsWith("%SFD"))
-                            {
-                                tempStr = tempStr.Remove(0, 4);
-                                MessageBox.Show("now Correction Factor is: " + tempStr);
-                            }
-                            else if (tempStr.StartsWith("%RFD"))
-                            {
-                                tempStr = tempStr.Remove(0, 4);
-                                //this.dapFactor.Text = tempStr.ToString();
-
-                                double tempCorrectionFactor = double.Parse(tempStr);
-
-                                tempCorrectionFactor = 1 / (1 + 0.0451) * tempCorrectionFactor;
-
-                                Application.DoEvents();//使textbook 立即刷新刚赋的值
-                            }
-                            else if (tempStr.Equals("TST"))
-                            {
-                                string str = "[" + DateTime.Now.ToString() + "] received data from " + socketSend.RemoteEndPoint + ":" + tempStr;
-                                this.clientLog.Invoke(receiveCallBack, str);
-                                MessageBox.Show("stability test successfully");
-                            }
-
                         }
                     }
-
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("receive data from DAP_emulator failurely：\n" + ex.ToString());
+                MessageBox.Show("Error From DAP_emulator：\n" + ex.ToString());
             }
         }
 
@@ -206,12 +191,12 @@ namespace SocketClient
             int charLen = socketSend.Send(buffer);
 
             string tempMsg = "[" + DateTime.Now.ToString() + "]" + logStr + socketSend.RemoteEndPoint;
-            this.clientLog.Invoke(receiveCallBack, tempMsg); //显示在日志框里
+            this.clientLog.Invoke(receiveCallBack, tempMsg);
         }
 
 
         /// <summary>
-        /// 向 DAP模拟器 发送数据
+        /// send data to DAPEmulator
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
@@ -237,11 +222,11 @@ namespace SocketClient
                 string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
 
                 byte[] buffer = new byte[2048];
-                buffer = Encoding.Default.GetBytes(json);//发送json字符串
+                buffer = Encoding.Default.GetBytes(json);
                 int receive = socketSend.Send(buffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] client sended message to " + socketSend.RemoteEndPoint + ":" + paraDict["data"];
-                clientLog.Invoke(receiveCallBack, tempMsg); //显示在日志框里
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + paraDict["data"];
+                clientLog.Invoke(receiveCallBack, tempMsg); 
             }
             catch (Exception ex)
             {
@@ -276,8 +261,9 @@ namespace SocketClient
                 buffer = Encoding.Default.GetBytes(json);
                 int receive = socketSend.Send(buffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] client sended message to " + socketSend.RemoteEndPoint + ":" + msgStr;
-                clientLog.Invoke(receiveCallBack, tempMsg); //显示在日志框里
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + msgStr;
+                clientLog.Invoke(receiveCallBack, tempMsg);
+
             }
             catch (Exception ex)
             {
@@ -287,7 +273,8 @@ namespace SocketClient
 
         private void client_Load(object sender, EventArgs e)
         {
-
+            this.ipAddress.Text = new Utils().GetAddressIP();
+            this.port.Text = "1111";
         }
 
         private void CalibrationValidate(object sender, EventArgs e)
@@ -327,8 +314,8 @@ namespace SocketClient
                 commBuffer = Encoding.Default.GetBytes(json);
                 int len = socketSend.Send(commBuffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] client sended message to " + socketSend.RemoteEndPoint + ":" + command;
-                clientLog.Invoke(receiveCallBack, tempMsg); //显示在日志框里
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
+                clientLog.Invoke(receiveCallBack, tempMsg); 
             }
             catch (Exception ex)
             {
@@ -368,8 +355,8 @@ namespace SocketClient
                         buffer = Encoding.Default.GetBytes(json);
                         int receive = socketSend.Send(buffer);
 
-                        string tempMsg = "[" + DateTime.Now.ToString() + "] client sended message to " + socketSend.RemoteEndPoint + ":" + msgStr;
-                        clientLog.Invoke(receiveCallBack, tempMsg); //显示在日志框里
+                        string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + msgStr;
+                        clientLog.Invoke(receiveCallBack, tempMsg); 
                     }
                 }
                 catch (Exception ex)
@@ -405,8 +392,8 @@ namespace SocketClient
                 commBuffer = Encoding.Default.GetBytes(json);
                 int len = socketSend.Send(commBuffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] client sended message to " + socketSend.RemoteEndPoint + ":" + command;
-                clientLog.Invoke(receiveCallBack, tempMsg); //显示在日志框里
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
+                clientLog.Invoke(receiveCallBack, tempMsg); 
             }
             catch (Exception ex)
             {
