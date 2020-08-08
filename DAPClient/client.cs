@@ -113,9 +113,6 @@ namespace DAPClient
                         }
                         else
                         {
-                            string tempMsg = "[" + DateTime.Now.ToString() + "] from " + commSocket.RemoteEndPoint + ":" + command;
-                            clientLog.Invoke(receiveCallBack, tempMsg);
-
                             switch (command)
                             {
                                 case "LoadAllData":
@@ -203,6 +200,7 @@ namespace DAPClient
             string tempMsg = "[" + DateTime.Now.ToString() + "]" + logStr + socketSend.RemoteEndPoint;
             this.clientLog.Invoke(receiveCallBack, tempMsg);
         }
+
 
 
         /// <summary>
@@ -308,6 +306,8 @@ namespace DAPClient
         private void Reset(object sender, EventArgs e)
         {
             SendJsonData("reset");
+
+
         }
 
         private void LoadData(object sender, EventArgs e)
@@ -357,21 +357,23 @@ namespace DAPClient
                         string tempCorrectioFactor = this.factor.Text;
 
                         //string command = "%SFD" + CorrectionFactor.ToString();
-                        string command = "%SFD" + tempCorrectioFactor;
+                        string command = tempCorrectioFactor;
+
                         paraDict = new Dictionary<string, string>
                         {
                             {"data", command}
                         };
 
-                        dapProtocol = new DAPProtocol(command, paraDict);
+                        dapProtocol = new DAPProtocol("%SFD", paraDict);
                         string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
+
+                        string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + dapProtocol.Head + command;
+                        clientLog.Invoke(receiveCallBack, tempMsg);
 
                         byte[] buffer = new byte[2048];
                         buffer = Encoding.Default.GetBytes(json);
                         int receive = socketSend.Send(buffer);
 
-                        string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
-                        clientLog.Invoke(receiveCallBack, tempMsg);
                     }
                 }
                 catch (Exception ex)
@@ -387,21 +389,37 @@ namespace DAPClient
         {
             string pressure = this.pressure.Text.Trim();
             string T = this.T.Text.Trim();
-            SendJsonData("savePT" + pressure + "," + T);
+            SendJsonData("savePT" + "?" + pressure + "&" + T);
         }
 
-        public void SendJsonData(string commamd)
+        public void SendJsonData(string dataContent)
         {
             try
             {
-                string command = commamd;
-
-                paraDict= new Dictionary<string, string>
+                if (dataContent.Equals("reset"))
                 {
-                    {"data", command}
-                };
+                    paraDict = new Dictionary<string, string>
+                    {
+                        {"data", dataContent},
+                    };
 
-                dapProtocol = new DAPProtocol(command, paraDict);
+                    dapProtocol = new DAPProtocol(dataContent, paraDict);
+                }
+                else 
+                {
+                    string[] commandStr = dataContent.Split('?');
+                    string[] dataStr = commandStr[1].Split('&');
+
+                    paraDict = new Dictionary<string, string>
+                    {
+                        {"AirPressure", dataStr[0]},
+                        {"Temperature", dataStr[1]}
+                    };
+
+                    dapProtocol = new DAPProtocol(commandStr[0], paraDict);
+                }
+
+
                 string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
 
                 byte[] commBuffer = new byte[2048];

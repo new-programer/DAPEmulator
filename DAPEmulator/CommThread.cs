@@ -117,7 +117,7 @@ namespace DAPEmulator
                                 threadDelegate(command, true, commSocket.RemoteEndPoint.ToString());
                             }
 
-                            double tempCorrectionFactor = double.Parse(dapProtocol.Body["CorrectionFactor"]);
+                            double tempCorrectionFactor = double.Parse(dapProtocol.Body["data"]);
                             if ((int)(tempCorrectionFactor * 100) != (int)(dapParameters.CorrectionFactor * 100))
                             {
                                 dapParameters.CorrectionFactor = tempCorrectionFactor;
@@ -130,6 +130,7 @@ namespace DAPEmulator
                             {
                                 dataContent = "Correction factor does not change";
                             }
+
                             factDict = new Dictionary<string, string>
                             {
                                 {"data", dataContent}
@@ -143,6 +144,9 @@ namespace DAPEmulator
                             {
                                 threadDelegate(command, false, commSocket.RemoteEndPoint.ToString());
                             }
+
+
+                            MessageBox.Show(dapProtocol.Body["data"]);
                             break;
 
                         case "LoadAllData":
@@ -181,11 +185,11 @@ namespace DAPEmulator
 
                             factDict = new Dictionary<string, string>
                             {
-                                {"sw_version", dapParameters.sw_version},
-                                {"InternalSN", dapParameters.InternalSN},
-                                {"CorrectionFactor", dapParameters.CorrectionFactor.ToString()},
-                                {"AirPressure", dapParameters.AirPressure.ToString()},
-                                {"Temperature", dapParameters.Temperature.ToString()},
+                                {"sw_version", dapParameters.sw_version_factory},
+                                {"InternalSN", dapParameters.InternalSN_factory},
+                                {"CorrectionFactor", dapParameters.CorrectionFactor_factory.ToString()},
+                                {"AirPressure", dapParameters.AirPressure_factory.ToString()},
+                                {"Temperature", dapParameters.Temperature_factory.ToString()},
                             };
                             dapProtocol = new DAPProtocol("reset", factDict);
                             buffer = utils.JsonDataOperationProtocol(dapProtocol);
@@ -212,7 +216,7 @@ namespace DAPEmulator
                                 dapParameters.AirPressure = tempAirPressure;
                                 dapParameters.Temperature = tempTemperature;
 
-                                dataContent = "save successfully";
+                                dataContent = "AirPressure and Temperature saved successfully";
                             }
                             else
                             {
