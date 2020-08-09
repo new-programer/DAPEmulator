@@ -16,7 +16,7 @@ namespace DAPClient
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new client());
+            Application.Run(new ClientUI());
         }
     }
 }

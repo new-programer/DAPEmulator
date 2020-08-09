@@ -10,9 +10,78 @@ using DAPClibrary;
 
 namespace DAPClient
 {
-    public partial class client : Form
+    public partial class ClientUI : Form
     {
-        public client()
+        //Fields
+        UpdateUIDelegate updateUIDelegate;
+        ClientCommunication clientCommunication;
+        //Properties
+        public string IpAddress 
+        {
+            get
+            {
+                return this.ipAddress.Text.Trim();
+            }
+            set
+            {
+                ipAddress.Text = value;
+            }
+        }
+
+        public string Port 
+        {
+            get 
+            {
+                return this.port.Text.Trim();
+            }
+            set 
+            {
+                port.Text = value; 
+            } 
+        }
+
+        public string ClientLog
+        {
+            get
+            {
+                return this.clientLog.Text.Trim();
+            }
+            set
+            {
+                clientLog.AppendText(value);
+            }
+        }
+
+        public string MsgBox
+        {
+            get
+            {
+                return this.msgText.Text.Trim();
+            }
+            set
+            {
+                msgText.Text = value;
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        public ClientUI()
         {
             /*click https://blog.csdn.net/weixin_44913038/article/details/102996655
              */
@@ -36,7 +105,7 @@ namespace DAPClient
         private ReceiveMsgCallBack receiveCallBack;
 
 
-        Socket socketSend;//Socket for creating connecing
+        Socket commSocket;//Socket for creating connecing
         Thread threadReceive; //Socket for receiving data from DAPEmulator
 
         string sw_version = "";
@@ -52,11 +121,19 @@ namespace DAPClient
         /// <param name="e"></param>
         private void CreateConnection(object sender, EventArgs e)
         {
+            clientCommunication = new ClientCommunication();
+            clientCommunication.UpdateUIDelegate = UpdateControl;//bind delegate
+            clientCommunication.StartConnection(commSocket, this);
+        }
+
+        private void StartConnection(Socket listenSocket)
+        {
             try
             {
-                socketSend = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 IPAddress ip = IPAddress.Parse(this.ipAddress.Text.Trim());
-                socketSend.Connect(ip, Convert.ToInt32(this.port.Text.Trim()));
+                int port = Convert.ToInt32(this.port.Text.Trim());
+                listenSocket.Connect(ip, port);
 
                 setCallBack = new SetTextCallBack(SetValue);
                 receiveCallBack = new ReceiveMsgCallBack(SetValue);
@@ -66,7 +143,7 @@ namespace DAPClient
                 threadReceive = new Thread(new ParameterizedThreadStart(Receive));
 
                 threadReceive.IsBackground = true;
-                threadReceive.Start(socketSend);
+                threadReceive.Start(listenSocket);
             }
             catch (Exception ex)
             {
@@ -82,9 +159,9 @@ namespace DAPClient
         /// <summary>
         /// receive data from DAPEmulator
         /// </summary>
-        private void Receive(object socketSend)
+        public void Receive(object socketSend)
         {
-            Socket commSocket = socketSend as Socket;
+            commSocket = socketSend as Socket;
 
             try
             {
@@ -195,9 +272,9 @@ namespace DAPClient
         {
             String json = JsonConvert.SerializeObject(dataDicts, Formatting.Indented);
             buffer = Encoding.Default.GetBytes(json);
-            int charLen = socketSend.Send(buffer);
+            int charLen = commSocket.Send(buffer);
 
-            string tempMsg = "[" + DateTime.Now.ToString() + "]" + logStr + socketSend.RemoteEndPoint;
+            string tempMsg = "[" + DateTime.Now.ToString() + "]" + logStr + commSocket.RemoteEndPoint;
             this.clientLog.Invoke(receiveCallBack, tempMsg);
         }
 
@@ -231,9 +308,9 @@ namespace DAPClient
 
                 byte[] buffer = new byte[2048];
                 buffer = Encoding.Default.GetBytes(json);
-                int receive = socketSend.Send(buffer);
+                int receive = commSocket.Send(buffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + paraDict["data"];
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + commSocket.RemoteEndPoint + ":" + paraDict["data"];
                 clientLog.Invoke(receiveCallBack, tempMsg);
             }
             catch (Exception ex)
@@ -270,9 +347,9 @@ namespace DAPClient
 
                 byte[] buffer = new byte[2048];
                 buffer = Encoding.Default.GetBytes(json);
-                int receive = socketSend.Send(buffer);
+                int receive = commSocket.Send(buffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + commSocket.RemoteEndPoint + ":" + command;
                 clientLog.Invoke(receiveCallBack, tempMsg);
 
             }
@@ -327,9 +404,9 @@ namespace DAPClient
 
                 byte[] commBuffer = new byte[2048];
                 commBuffer = Encoding.Default.GetBytes(json);
-                int len = socketSend.Send(commBuffer);
+                int len = commSocket.Send(commBuffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + commSocket.RemoteEndPoint + ":" + command;
                 clientLog.Invoke(receiveCallBack, tempMsg);
             }
             catch (Exception ex)
@@ -367,12 +444,12 @@ namespace DAPClient
                         dapProtocol = new DAPProtocol("%SFD", paraDict);
                         string json = JsonConvert.SerializeObject(dapProtocol, Formatting.Indented);
 
-                        string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + dapProtocol.Head + command;
+                        string tempMsg = "[" + DateTime.Now.ToString() + "] to " + commSocket.RemoteEndPoint + ":" + dapProtocol.Head + command;
                         clientLog.Invoke(receiveCallBack, tempMsg);
 
                         byte[] buffer = new byte[2048];
                         buffer = Encoding.Default.GetBytes(json);
-                        int receive = socketSend.Send(buffer);
+                        int receive = commSocket.Send(buffer);
 
                     }
                 }
@@ -424,15 +501,39 @@ namespace DAPClient
 
                 byte[] commBuffer = new byte[2048];
                 commBuffer = Encoding.Default.GetBytes(json);
-                int len = socketSend.Send(commBuffer);
+                int len = commSocket.Send(commBuffer);
 
-                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + socketSend.RemoteEndPoint + ":" + command;
+                string tempMsg = "[" + DateTime.Now.ToString() + "] to " + commSocket.RemoteEndPoint + ":" + command;
                 clientLog.Invoke(receiveCallBack, tempMsg);
             }
             catch (Exception ex)
             {
                 MessageBox.Show("ReadDAP exception：\n" + ex.Message);
             }
+        }
+
+
+        //binded by updateUIControlDelegate
+        public void UpdateControl(string logContent, int flag, string endPoint)
+        {
+            string temp = "";
+            switch (flag)
+            {
+                case 1:
+                    temp = " from ";
+                    break;
+                case 0:
+                    temp = " to ";
+                    break;
+                default://flag == -1
+                    temp = " connect to ";
+                    break;
+            }
+
+            logContent = "[" + DateTime.Now.ToString() + "]" + temp + endPoint + ":" + logContent;
+
+            clientLog.AppendText(logContent + "\n");
+            Application.DoEvents();
         }
     }
 }

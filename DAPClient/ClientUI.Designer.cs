@@ -1,6 +1,6 @@
 ﻿namespace DAPClient
 {
-    partial class client
+    partial class ClientUI
     {
         /// <summary>
         /// Required designer variable.
